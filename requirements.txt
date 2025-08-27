@@ -1,0 +1,5 @@
+databricks-sdk==0.64.0
+databricks-sql-connector[pyarrow]==4.1.1
+fastapi[standard]==0.115.12
+fastapi-cli==0.0.7
+APScheduler==3.11.0

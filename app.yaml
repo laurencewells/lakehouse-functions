@@ -1,0 +1,33 @@
+command: ["uvicorn", "app:app"]
+
+env:
+  - name: 'DATABRICKS_WAREHOUSE_PATH'
+    value: '/sql/1.0/warehouses/{your warehouse-id}'
+
+functions:
+  - name: "example"
+    trigger:
+      type: "timer"
+      schedule: "*/1 * * * *"  # Every 1 minute
+  - name: "async_unity_call_http"
+    trigger:
+      type: "http"
+      method: "POST"
+      endpoint: "/async-unity-call"
+  - name: "async_unity_call"
+    trigger:
+      type: "timer"
+      schedule: "0/5 * * * *"  # Every 5 minutes
+  - name: "non_async_unity_call"
+    trigger:
+      type: "http"
+      method: "POST"
+      endpoint: "/non-async-unity-call"
+  - name: "unity_table_fire"
+    trigger:
+      type: "unity_table"
+      check_interval: 30  # Check every 30 seconds
+      table_config: 
+        catalog: "_data"
+        schema: "tpch"
+        name: "dim_customer"
