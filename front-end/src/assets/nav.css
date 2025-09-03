@@ -1,0 +1,28 @@
+/*
+Defines the nav-databricks class
+*/
+
+.nav-databricks {
+    background-color: #FF3621;
+    --bs-nav-link-color: #F9F7F4;
+    --bs-nav-link-disabled-color: #F9F7F4;
+  }
+
+  .nav-databricks navbar-brand{
+    --bs-nav-link-color: #F9F7F4;
+  }
+.container .row {
+  margin-top: 1rem;
+  padding: 1rem;
+}
+.cell-table{
+  margin-top: 1rem;
+  padding: 0.5rem;
+}
+.cell-table .column-header-name{
+  text-align: center;
+}
+
+.hidden {
+  display: none;
+}
