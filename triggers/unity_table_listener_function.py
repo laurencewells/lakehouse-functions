@@ -3,16 +3,16 @@ import logging as L
 from common.repository import Unity
 from triggers.execute import execute_action
 from common.websocket_manager import manager
-# Store the last processed version for each table
-_table_versions = {}
+# Store the last processed timestamp for each table
+_table_timestamps = {}
 
 async def unity_table_listener(table_name: str, function_name: str) -> dict:
     """
     Monitor changes in a Unity table and trigger a function when changes are detected.
     
     This function:
-    1. Checks for changes in the specified Unity table using DESCRIBE HISTORY
-    2. Maintains version tracking to detect new changes
+    1. Checks for changes in the specified Unity table using table.updated_at timestamp
+    2. Maintains timestamp tracking to detect new changes
     3. Triggers the specified function when changes are detected
     4. Broadcasts status updates via WebSocket
     
@@ -26,7 +26,8 @@ async def unity_table_listener(table_name: str, function_name: str) -> dict:
                 {
                     "status": "success",
                     "changes_detected": True,
-                    "latest_version": <version_number>,
+                    "latest_timestamp": <timestamp_in_millis>,
+                    "latest_timestamp_iso": <iso_timestamp_string>,
                     "action": "initial state recorded" | "changes processed"
                 }
             On success without changes:
@@ -43,25 +44,27 @@ async def unity_table_listener(table_name: str, function_name: str) -> dict:
     Note:
         - The first run for a table will record the initial state without triggering the function
         - Subsequent changes will trigger the specified function
-        - Version tracking persists across function calls using the _table_versions global dict
+        - Timestamp tracking persists across function calls using the _table_timestamps global dict
     """
+
     try:
         try:
             await manager.broadcast_log(f"Checking Unity table {table_name} for changes...")
         except Exception as ws_exc:
             L.warning(f"WebSocket broadcast failed: {ws_exc}")
         # Get Unity connection
+        
         unity = Unity()
-        # Get the last processed version for this table
-        last_version = _table_versions.get(table_name)
+        # Get the last processed timestamp for this table
+        last_timestamp = _table_timestamps.get(table_name)
         # Check for changes
-        changes = await unity.detect_changes(table_name, last_version)
+        changes = await unity.detect_changes_by_timestamp(table_name, last_timestamp)
         if changes:
-            change_msg = f"Detected changes in Unity table {table_name} - new version: {changes['latest_version']}"
+            change_msg = f"Detected changes in Unity table {table_name} - new timestamp: {changes['latest_timestamp_iso']}"
             L.info(change_msg)
             await manager.broadcast_log(change_msg)
-            # Update the last processed version
-            _table_versions[table_name] = changes["latest_version"]
+            # Update the last processed timestamp
+            _table_timestamps[table_name] = changes["latest_timestamp"]
             # If this is not just the initial state, trigger the example function
             if changes["type"] != "initial_state":
                 await manager.broadcast_log(f"Triggering function {function_name} due to table changes")
@@ -72,7 +75,8 @@ async def unity_table_listener(table_name: str, function_name: str) -> dict:
             return {
                 "status": "success",
                 "changes_detected": True,
-                "latest_version": changes["latest_version"],
+                "latest_timestamp": changes["latest_timestamp"],
+                "latest_timestamp_iso": changes["latest_timestamp_iso"],
                 "action": "initial state recorded" if changes["type"] == "initial_state" else "changes processed"
             }
         

@@ -8,7 +8,7 @@ functions:
   - name: "example"
     trigger:
       type: "timer"
-      schedule: "*/1 * * * *"  # Every 1 minute
+      schedule: "*/9 * * * *"  # Every 9 minutes
   - name: "async_unity_call_http"
     trigger:
       type: "http"

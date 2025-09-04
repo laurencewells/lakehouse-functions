@@ -3,6 +3,7 @@ from pandas import DataFrame
 import asyncio
 from typing import Optional
 import logging as L
+import datetime
 
 class Unity:
     """
@@ -21,6 +22,7 @@ class Unity:
     def __init__(self) -> None:
         """Initialize Unity class with an authenticated Databricks client."""
         self.client = DatabricksAuthentication().client
+        self.workspace_client = DatabricksAuthentication().get_workspace_client()
 
     async def run_sql_statement_async(self, statement: str) -> Optional[DataFrame]:
         """
@@ -145,4 +147,79 @@ class Unity:
             
         except Exception as e:
             raise Exception(f"Error detecting changes: {str(e)}")
+
+    def convert_millis_to_timestamp(self, millis: int) -> str:
+        """Convert milliseconds since epoch to ISO 8601 timestamp."""
+        return datetime.datetime.fromtimestamp(millis / 1000.0).isoformat()
+
+    async def get_table_last_updated(self, table_name: str) -> int:
+        """
+        Get the last updated timestamp for a Unity table using the workspace client.
+        Returns the updated_at timestamp in milliseconds.
+        """
+        try:
+            table_info = await asyncio.to_thread(lambda: self.workspace_client.tables.get(table_name))
+            return table_info.updated_at
+        except Exception as e:
+            raise Exception(f"Error getting table last updated timestamp: {str(e)}")
+
+    async def detect_changes_by_timestamp(self, table_name: str, last_processed_timestamp: Optional[int] = None) -> Optional[dict]:
+        """
+        Detect changes in a Unity table by comparing last updated timestamps.
+        
+        This method checks if there have been any changes to the table since
+        the last processed timestamp using the table's updated_at field.
+        
+        Args:
+            table_name (str): The name of the Unity table to check
+            last_processed_timestamp (Optional[int]): The last timestamp that was processed (in milliseconds).
+                                                    If None, indicates first run.
+            
+        Returns:
+            Optional[dict]: Information about detected changes with the following structure:
+                For initial state (first run):
+                    {
+                        "type": "initial_state",
+                        "latest_timestamp": <timestamp_in_millis>,
+                        "latest_timestamp_iso": <iso_timestamp_string>
+                    }
+                For detected changes:
+                    {
+                        "type": "changes_detected",
+                        "latest_timestamp": <timestamp_in_millis>,
+                        "latest_timestamp_iso": <iso_timestamp_string>
+                    }
+                If no changes: None
+                
+        Raises:
+            Exception: If there's an error accessing table information or detecting changes
+            
+        Note:
+            The first run (last_processed_timestamp=None) always returns initial state
+            without triggering change detection
+        """
+        try:
+            L.info(f"Detecting changes for table {table_name} with last processed timestamp {last_processed_timestamp}")
+            latest_timestamp = await self.get_table_last_updated(table_name)
+            
+            # If no last timestamp provided, return initial state
+            if last_processed_timestamp is None:
+                return {
+                    "type": "initial_state",
+                    "latest_timestamp": latest_timestamp,
+                    "latest_timestamp_iso": self.convert_millis_to_timestamp(latest_timestamp)
+                }
+            
+            # Check if there are any changes
+            if latest_timestamp == last_processed_timestamp:
+                return None
+            
+            return {
+                "type": "changes_detected",
+                "latest_timestamp": latest_timestamp,
+                "latest_timestamp_iso": self.convert_millis_to_timestamp(latest_timestamp)
+            }
+            
+        except Exception as e:
+            raise Exception(f"Error detecting changes by timestamp: {str(e)}")
 

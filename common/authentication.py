@@ -3,6 +3,7 @@ from datetime import datetime
 from databricks import sql
 from databricks.sql.client import Connection
 from databricks.sdk.core import Config, oauth_service_principal
+from databricks.sdk import WorkspaceClient
 import logging
 
 class DatabricksAuthentication:
@@ -99,6 +100,41 @@ class DatabricksAuthentication:
             )
         else:
             raise ValueError("No authentication method provided")
+
+    def get_workspace_client(self) -> WorkspaceClient:
+        """
+        Get an authenticated Databricks workspace client.
+
+        Returns:
+            WorkspaceClient: Authenticated Databricks workspace client
+
+        Raises:
+            ValueError: If no valid authentication method is available
+        """
+        if self.bearer:
+            logging.log(logging.INFO, "Using bearer authentication")
+            return WorkspaceClient(
+                host=self.server,
+                token=self.bearer,
+            )
+        local_tz = self._local_tz()
+        if "DATABRICKS_TOKEN" in os.environ:
+            logging.log(logging.INFO, "Using token authentication")
+            return WorkspaceClient(
+                host=self.server,
+                token=os.getenv("DATABRICKS_TOKEN"),
+            )
+        elif "DATABRICKS_CLIENT_ID" in os.environ:
+            logging.log(logging.INFO, "Using machine authentication")
+            return WorkspaceClient(
+                host=self.server,
+                credentials_provider=self.__credential_provider,
+                session_configuration={"timezone": local_tz},
+            )
+        else:
+            raise ValueError("No authentication method provided")
+
+
 
     def __credential_provider(self) -> str:
         """

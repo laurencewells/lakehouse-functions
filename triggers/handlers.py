@@ -217,15 +217,8 @@ class UnityTableTriggerHandler(AsyncTriggerHandler):
         # Get check interval (default 60 seconds)
         interval = self.trigger_config.get('check_interval', 60)
         
-        # Format the full table name with backticks to handle spaces
-        def escape_name(name: str) -> str:
-            """Wrap table name components in backticks for consistent escaping."""
-            return f"`{name}`"
-            
-        catalog = escape_name(table_config['catalog'])
-        schema = escape_name(table_config['schema'])
-        name = escape_name(table_config['name'])
-        full_table_name = f"{catalog}.{schema}.{name}"
+        # Format the full table name without backticks to handle spaces
+        full_table_name = f"{table_config['catalog']}.{table_config['schema']}.{table_config['name']}"
         
         await self.log_message(f"Setting up Unity table trigger for function: {self.function_name}")
         
