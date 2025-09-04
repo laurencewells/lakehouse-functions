@@ -1,3 +1,4 @@
+import json
 from common.authentication import DatabricksAuthentication
 from pandas import DataFrame
 import asyncio
@@ -95,6 +96,16 @@ class Unity:
     def convert_millis_to_timestamp(self, millis: int) -> str:
         """Convert milliseconds since epoch to ISO 8601 timestamp."""
         return datetime.datetime.fromtimestamp(millis / 1000.0).isoformat()
+    
+    def get_version_and_timestamp(self) -> tuple[int, int]:
+        table_info = self.workspace_client.tables.get("_data.tpch.dim_customer", include_delta_metadata=True)
+        delta_props = table_info.delta_runtime_properties_kvpairs.delta_runtime_properties
+
+        # Parse the commit attributes to get version and file status
+        commit_attrs = json.loads(delta_props['delta.commitAttributes'])
+        modification_time = commit_attrs['fileStatus']['modificationTime']
+        version = [commit_attrs['version']]
+        return version, modification_time
 
     async def get_table_last_updated(self, table_name: str) -> int:
         """
@@ -102,8 +113,8 @@ class Unity:
         Returns the updated_at timestamp in milliseconds.
         """
         try:
-            table_info = await asyncio.to_thread(lambda: self.workspace_client.tables.get(table_name))
-            return table_info.updated_at
+            version, modification_time = await asyncio.to_thread(self.get_version_and_timestamp)
+            return int(modification_time)
         except Exception as e:
             raise Exception(f"Error getting table last updated timestamp: {str(e)}")
 
