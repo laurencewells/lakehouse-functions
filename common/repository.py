@@ -92,62 +92,6 @@ class Unity:
         except Exception as e:
             raise Exception(f"Error getting table history: {str(e)}")
 
-    async def detect_changes(self, table_name: str, last_processed_version: Optional[int] = None) -> Optional[dict]:
-        """
-        Detect changes in a Unity table by comparing versions.
-        
-        This method checks if there have been any changes to the table since
-        the last processed version by comparing version numbers from the table history.
-        
-        Args:
-            table_name (str): The name of the Unity table to check
-            last_processed_version (Optional[int]): The last version that was processed.
-                                                  If None, indicates first run.
-            
-        Returns:
-            Optional[dict]: Information about detected changes with the following structure:
-                For initial state (first run):
-                    {
-                        "type": "initial_state",
-                        "latest_version": <version_number>
-                    }
-                For detected changes:
-                    {
-                        "type": "changes_detected",
-                        "latest_version": <version_number>
-                    }
-                If no changes: None
-                
-        Raises:
-            Exception: If there's an error accessing table history or detecting changes
-            
-        Note:
-            The first run (last_processed_version=None) always returns initial state
-            without triggering change detection
-        """
-        try:
-            L.info(f"Detecting changes for table {table_name} with last processed version {last_processed_version}")
-            latest_version = await self.get_latest_version(table_name)
-            
-            # If no last version provided, return initial state
-            if last_processed_version is None:
-                return {
-                    "type": "initial_state",
-                    "latest_version": latest_version,
-                }
-            
-            # Check if there are any changes
-            if latest_version == last_processed_version:
-                return None
-            
-            return {
-                "type": "changes_detected",
-                "latest_version": latest_version,
-            }
-            
-        except Exception as e:
-            raise Exception(f"Error detecting changes: {str(e)}")
-
     def convert_millis_to_timestamp(self, millis: int) -> str:
         """Convert milliseconds since epoch to ISO 8601 timestamp."""
         return datetime.datetime.fromtimestamp(millis / 1000.0).isoformat()
