@@ -8,7 +8,7 @@ functions:
   - name: "example"
     trigger:
       type: "timer"
-      schedule: "*/1 * * * *"  # Every 1 minute
+      schedule: "*/9 * * * *"  # Every 9 minutes
   - name: "async_unity_call_http"
     trigger:
       type: "http"
@@ -23,10 +23,19 @@ functions:
       type: "http"
       method: "GET"
       endpoint: "/non-async-unity-call"
+  - name: "unity_volume_fire"
+    trigger:
+      type: "unity_volume"
+      check_interval: 3600  # Check every hour
+      volume_config:
+        catalog: "_data"
+        schema: "reference"
+        name: "uploads"
+        sub_path: "sub_test" # optional
   - name: "unity_table_fire"
     trigger:
       type: "unity_table"
-      check_interval: 30  # Check every 30 seconds
+      check_interval: 1800  # Check every 30 minutes
       table_config: 
         catalog: "_data"
         schema: "tpch"

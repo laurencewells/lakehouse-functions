@@ -34,9 +34,27 @@
                         <template v-else>N/A</template> 
                       </p>
                     </template>
-                    <span class="bg-secondary badge" @click="viewCode(func)">
-                      <i class="bi bi-code-slash"></i>
-                    </span>
+                    <template v-else-if="func.trigger.type === 'unity_volume'">
+                      <p class="mb-2"><i class="bi bi-clock-history me-2"></i><strong>Check Interval:</strong> {{ func.trigger.check_interval }}s</p>
+                      <p class="mb-2"><i class="bi bi-archive me-2"></i><strong>Volume Name: </strong> 
+                        <template v-if="func.trigger.volume_config">
+                          <span class="table-part">{{ func.trigger.volume_config.catalog }}</span>
+                          <span class="table-separator">/</span>
+                          <span class="table-part">{{ func.trigger.volume_config.schema }}</span>
+                          <span class="table-separator">/</span>
+                          <span class="table-part">{{ func.trigger.volume_config.name }}</span>
+                          <span class="table-separator">/</span>
+                          <span class="table-part">{{ func.trigger.volume_config.sub_path }}</span>
+                        </template>
+                        <template v-else>N/A</template> 
+                      </p>
+                    </template>
+                      <button class="btn btn-secondary" @click="viewCode(func)" title="View Source Code">
+                        <i class="bi bi-code-slash p-2"></i>
+                      </button>
+                        <button class="btn btn-success m-2" @click="executeFunctionHandler(func.name)" title="Execute Function">
+                          <i class="bi bi-play p-2"></i>
+                        </button>
                   </div>
                 </div>
               </div>
@@ -51,10 +69,10 @@
         <h3 class="mb-0">{{ selectedFunctionName }} - Source Code</h3>
       </template>
       <template #content>
-        <pre class="code-block"><code>{{ selectedFunctionCode }}</code></pre>
+        <pre class="code-block mt-3"><code>{{ selectedFunctionCode }}</code></pre>
       </template>
       <template #footer>
-        <button class="btn btn-secondary mt-2" @click="showCodeModal = false">Close</button>
+        <button class="btn btn-secondary mt-3" @click="showCodeModal = false">Close</button>
       </template>
     </TheModal>
     </div>
@@ -62,7 +80,7 @@
 
 <script setup>
 import { ref, onMounted, reactive } from 'vue'
-import { getFunctions } from '../services/apiService'
+import { getFunctions, executeFunction } from '../services/apiService'
 import TheSpinner from './TheSpinner.vue'
 import TheModal from './TheModal.vue'
 import { toast } from 'vue3-toastify'
@@ -84,11 +102,20 @@ const getBadgeClass = (triggerType) => {
   const classes = {
     timer: 'bg-primary',
     http: 'bg-success',
-    unity_table: 'bg-warning text-dark'
+    unity_table: 'bg-warning text-dark',
+    unity_volume: 'bg-info text-dark'
   }
   return classes[triggerType] || 'bg-secondary'
 }
 
+const executeFunctionHandler = (functionName) => {
+  executeFunction(functionName).then(response => {
+    toast.success('Function executed successfully')
+  }).catch(err => {
+    toast.error('Failed to execute function. Please try again.')
+    console.error('Error executing function:', err)
+  })
+}
 const formatCronSchedule = (cronExpression) => {
   // Handle common patterns
   if (cronExpression === '*/1 * * * *') return 'Every minute'
@@ -141,18 +168,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.functions-list {
-  padding: 2rem;
-}
-
-.card {
-  transition: transform 0.2s ease;
-}
-
-.card:hover {
-  transform: translateY(-2px);
-}
-
 .code-block {
   background-color: #f8f9fa;
   padding: 1rem;

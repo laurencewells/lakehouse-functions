@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from common.app_factory import app_factory
 from common.websocket_manager import manager
 from common.config import is_development, get_cors_origins, get_static_files_directory
+from triggers.execute import execute_action
 
 # Create the FastAPI application
 app = app_factory.create_app()
@@ -58,6 +59,38 @@ async def list_functions() -> dict:
         except Exception as e:
             function['code'] = f"# Error reading function file: {str(e)}"
     return {"functions": functions}
+
+@app.post("/api/v1/functions/execute")
+async def execute_function_adhoc(payload: dict) -> dict:
+    """
+    Ad-hoc function execution endpoint.
+
+    This endpoint allows for the execution of a function by name.
+    The function name is passed in the request body as JSON.
+
+    Args:
+        payload (dict): The request body containing the function name.
+
+    Returns:
+        dict: The result of the function execution.
+    """
+    function_name = payload.get("function_name")
+    print(function_name)
+    if not function_name:
+        return {"error": "Missing 'function_name' in request body"}
+    await manager.broadcast_log("Executing ad-hoc function: " + function_name)
+    result = await execute_action(function_name)
+    
+    # Broadcast appropriate message based on execution result
+    if result.get("status") == "success":
+        await manager.broadcast_log(f"Successfully executed function: {function_name}")
+    elif result.get("status") == "error":
+        await manager.broadcast_log(f"Error executing function {function_name}: {result.get('message', 'Unknown error')}")
+    else:
+        # Handle legacy format or unexpected result structure
+        await manager.broadcast_log(f"Function {function_name} executed with result: {str(result)}")
+    
+    return result
 
 
 @app.websocket("/api/v1/ws")

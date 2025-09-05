@@ -1,4 +1,5 @@
 import asyncio
+from curses import OK
 import importlib
 import logging as L
 
@@ -38,10 +39,10 @@ async def execute_action(function: str) -> dict:
             else:
                 # Run sync functions in a thread pool to avoid blocking
                 result = await asyncio.to_thread(module.main)
-            return result
+            return  {"status": "success", "result": result or OK}
         else:
             L.error(f"No main function found in {function}_function")
             return {"error": "Function not found"}
     except Exception as e:
         L.error(f"Error executing function {function}: {str(e)}")
-        return {"error": str(e)}
+        return {"status": "error", "message": str(e)}

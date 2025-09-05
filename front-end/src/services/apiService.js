@@ -12,3 +12,8 @@ export const getFunctions = async () => {
     const response = await api.get('functions');
     return response.data;
 }
+
+export const executeFunction = async (functionName) => {
+  const response = await api.post('functions/execute', { function_name: functionName });
+  return response.data;
+}

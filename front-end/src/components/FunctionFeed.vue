@@ -10,13 +10,12 @@
               <i class="bi bi-activity me-2"></i>No function activity yet...
             </div>
             <div v-else class="message-list">
-              <div v-for="message in [...messages].reverse()" :key="message.id" class="alert alert-info mb-3">
+              <div v-for="message in [...messages].reverse()" :key="message.id" class="alert alert-info mb-2 p-2">
                 <div class="d-flex justify-content-between align-items-center mb-1">
-                  <small class="text-muted">
-                    <i class="bi bi-clock me-1"></i>{{ message.timestamp }}
+                  <small class="message-text">
+                    <i class="bi bi-clock me-1"></i>{{ message.timestamp }} {{ message.text }}
                   </small>
                 </div>
-                <div class="message-text">{{ message.text }}</div>
               </div>
             </div>
           </div>

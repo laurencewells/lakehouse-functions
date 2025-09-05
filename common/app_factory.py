@@ -89,7 +89,8 @@ class ServerlessAppFactory:
         # Get only async triggers (timer and unity_table)
         async_functions = (
             get_functions_by_trigger_type(self.config, 'timer') +
-            get_functions_by_trigger_type(self.config, 'unity_table')
+            get_functions_by_trigger_type(self.config, 'unity_table') +
+            get_functions_by_trigger_type(self.config, 'unity_volume')
         )
         
         for function_instance in async_functions:
