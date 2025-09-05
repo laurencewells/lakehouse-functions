@@ -6,6 +6,8 @@ from typing import Optional
 import logging as L
 import datetime
 
+VOLUME_LIST_LIMIT = 10 # 10k limit
+
 class Unity:
     """
     A class to interact with Unity tables through Databricks SQL.
@@ -97,8 +99,8 @@ class Unity:
         """Convert milliseconds since epoch to ISO 8601 timestamp."""
         return datetime.datetime.fromtimestamp(millis / 1000.0).isoformat()
     
-    def get_version_and_timestamp(self) -> tuple[int, int]:
-        table_info = self.workspace_client.tables.get("_data.tpch.dim_customer", include_delta_metadata=True)
+    async def get_table_update_timestamp(self) -> tuple[int, int]:
+        table_info = await asyncio.to_thread(self.workspace_client.tables.get, "_data.tpch.dim_customer", include_delta_metadata=True)
         delta_props = table_info.delta_runtime_properties_kvpairs.delta_runtime_properties
 
         # Parse the commit attributes to get version and file status
@@ -113,10 +115,49 @@ class Unity:
         Returns the updated_at timestamp in milliseconds.
         """
         try:
-            version, modification_time = await asyncio.to_thread(self.get_version_and_timestamp)
+            version, modification_time = await self.get_table_update_timestamp()
             return int(modification_time)
         except Exception as e:
             raise Exception(f"Error getting table last updated timestamp: {str(e)}")
+    
+    async def file_list_update_timestamp(self, volume_path: str) -> Optional[int]:
+        """
+        Get the last updated timestamp for a Unity volume using the workspace client.
+        Returns the updated_at timestamp in milliseconds.
+        """
+        file_info = await asyncio.to_thread(self.workspace_client.files.list_directory_contents, volume_path)
+        if not file_info:
+            raise Exception(f"No file info found for volume {volume_path}")
+        file_dates = []
+        if hasattr(file_info, 'next_page_token'):
+            limit_reached = False
+            limit = VOLUME_LIST_LIMIT
+            while file_info or limit_reached:
+                for f in file_info:
+                    file_dates.append(f.last_modified)
+                    limit -= 1
+                    if limit == 0:
+                        limit_reached = True
+                file_info = await asyncio.to_thread(
+                    self.workspace_client.files.list_directory_contents, volume_path, page_token=file_info.next_page_token)
+        else:
+            for f in file_info:
+                file_dates.append(f.last_modified)
+        return int(max(file_dates)) if file_dates else None
+        
+    async def get_volume_last_updated_timestamp(self, volume_path: str) -> int:
+        """
+        Get the last updated timestamp for a Unity volume using the workspace client.
+        Returns the updated_at timestamp in milliseconds.
+        """
+        try:
+            modification_time = await self.file_list_update_timestamp(volume_path)
+            if modification_time:
+                return modification_time
+            else:
+                return 0
+        except Exception as e:
+            raise Exception(f"Error getting volume last updated timestamp: {str(e)}")
 
     async def detect_changes_by_timestamp(self, table_name: str, last_processed_timestamp: Optional[int] = None) -> Optional[dict]:
         """
@@ -156,6 +197,67 @@ class Unity:
         try:
             L.info(f"Detecting changes for table {table_name} with last processed timestamp {last_processed_timestamp}")
             latest_timestamp = await self.get_table_last_updated(table_name)
+            
+            # If no last timestamp provided, return initial state
+            if last_processed_timestamp is None:
+                return {
+                    "type": "initial_state",
+                    "latest_timestamp": latest_timestamp,
+                    "latest_timestamp_iso": self.convert_millis_to_timestamp(latest_timestamp)
+                }
+            
+            # Check if there are any changes
+            if latest_timestamp == last_processed_timestamp:
+                return None
+            
+            return {
+                "type": "changes_detected",
+                "latest_timestamp": latest_timestamp,
+                "latest_timestamp_iso": self.convert_millis_to_timestamp(latest_timestamp)
+            }
+            
+        except Exception as e:
+            raise Exception(f"Error detecting changes by timestamp: {str(e)}")
+        
+        
+    async def detect_volume_changes_by_timestamp(self, volume_path: str, last_processed_timestamp: Optional[int] = None) -> Optional[dict]:
+        """
+        Detect changes in a Unity volume by comparing last updated timestamps.
+        
+        This method checks if there have been any changes to the volume since
+        the last processed timestamp using the volume's updated_at field.
+        
+        Args:
+            volume_path (str): The path of the Unity volume to check
+            last_processed_timestamp (Optional[int]): The last timestamp that was processed (in milliseconds).
+                                                    If None, indicates first run.
+            
+        Returns:
+            Optional[dict]: Information about detected changes with the following structure:
+                For initial state (first run):
+                    {
+                        "type": "initial_state",
+                        "latest_timestamp": <timestamp_in_millis>,
+                        "latest_timestamp_iso": <iso_timestamp_string>
+                    }
+                For detected changes:
+                    {
+                        "type": "changes_detected",
+                        "latest_timestamp": <timestamp_in_millis>,
+                        "latest_timestamp_iso": <iso_timestamp_string>
+                    }
+                If no changes: None
+                
+        Raises:
+            Exception: If there's an error accessing volume information or detecting changes
+            
+        Note:
+            The first run (last_processed_timestamp=None) always returns initial state
+            without triggering change detection
+        """
+        try:
+            L.info(f"Detecting changes for volume {volume_path} with last processed timestamp {last_processed_timestamp}")
+            latest_timestamp = await self.get_volume_last_updated_timestamp(volume_path)
             
             # If no last timestamp provided, return initial state
             if last_processed_timestamp is None:

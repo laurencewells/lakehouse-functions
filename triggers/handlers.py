@@ -226,7 +226,7 @@ class UnityTableTriggerHandler(AsyncTriggerHandler):
         async def monitor_unity_table():
             try:
                 await self.log_message(f"Monitoring Unity table {full_table_name} for function: {self.function_name}")
-                from triggers.unity_table_listener_function import unity_table_listener
+                from triggers.unity_listener_functions import unity_table_listener
                 await unity_table_listener(full_table_name, self.function_name)
             except Exception as e:
                 await self.handle_error(e, f"Error monitoring Unity table {full_table_name}")
@@ -235,6 +235,65 @@ class UnityTableTriggerHandler(AsyncTriggerHandler):
         self.scheduler.add_job(monitor_unity_table, 'interval', seconds=interval)
         await self.log_message(f"Set up Unity table monitor for {full_table_name} (checking every {interval} seconds)")
         
+class UnityVolumeTriggerHandler(AsyncTriggerHandler):
+    """
+    Handler for Unity table-triggered functions.
+    
+    This handler sets up monitoring jobs that watch Unity tables
+    for changes and execute functions when changes are detected.
+    
+    Attributes:
+        Inherits all attributes from AsyncTriggerHandler
+    """
+    
+    async def setup(self) -> None:
+        """
+        Set up Unity table monitoring for the function.
+        
+        Creates an APScheduler job that periodically checks the specified
+        Unity table for changes and executes the function when changes
+        are detected.
+        
+        Raises:
+            ValueError: If scheduler instance is not provided
+            KeyError: If required trigger configuration is missing
+        """
+        if not self.scheduler:
+            raise ValueError("Scheduler instance required for Unity table triggers")
+            
+        volume_config = self.trigger_config.get('volume_config')
+        if not volume_config:
+            raise KeyError("Unity table trigger requires 'volume_config' configuration")
+            
+        # Validate table name structure
+        if not all(key in volume_config for key in ['catalog', 'schema', 'name']):
+            raise KeyError("Volume name configuration must include 'catalog', 'schema', and 'name'")
+            
+        # Get check interval (default 60 seconds)
+        interval = self.trigger_config.get('check_interval', 60)
+        
+        if volume_config.get('sub_path'):
+            full_volume_path = f"/Volumes/{volume_config['catalog']}/{volume_config['schema']}/{volume_config['name']}/{volume_config.get('sub_path')}"
+        else:
+            full_volume_path = f"/Volumes/{volume_config['catalog']}/{volume_config['schema']}/{volume_config['name']}"
+            
+        # Format the full table name without backticks to handle spaces
+        
+        await self.log_message(f"Setting up Unity volume trigger for function: {self.function_name}")
+        
+        # Create monitoring function
+        async def monitor_unity_volume():
+            try:    
+                await self.log_message(f"Monitoring Unity volume {full_volume_path} for function: {self.function_name}")
+                from triggers.unity_listener_functions import unity_volume_listener
+                await unity_volume_listener(full_volume_path, self.function_name)
+            except Exception as e:
+                await self.handle_error(e, f"Error monitoring Unity volume {full_volume_path}")
+                
+        # Add job to scheduler
+        self.scheduler.add_job(monitor_unity_volume, 'interval', seconds=interval)
+        await self.log_message(f"Set up Unity volume monitor for {full_volume_path} (checking every {interval} seconds)")
+                           
 
 class HTTPTriggerHandler(SyncTriggerHandler):
     """
@@ -329,6 +388,7 @@ class TriggerHandlerFactory:
         handlers = {
             'timer': TimerTriggerHandler,
             'unity_table': UnityTableTriggerHandler,
+            'unity_volume': UnityVolumeTriggerHandler,
             'http': HTTPTriggerHandler
         }
         

@@ -34,6 +34,21 @@
                         <template v-else>N/A</template> 
                       </p>
                     </template>
+                    <template v-else-if="func.trigger.type === 'unity_volume'">
+                      <p class="mb-2"><i class="bi bi-clock-history me-2"></i><strong>Check Interval:</strong> {{ func.trigger.check_interval }}s</p>
+                      <p class="mb-2"><i class="bi bi-archive me-2"></i><strong>Volume Name: </strong> 
+                        <template v-if="func.trigger.volume_config">
+                          <span class="table-part">{{ func.trigger.volume_config.catalog }}</span>
+                          <span class="table-separator">/</span>
+                          <span class="table-part">{{ func.trigger.volume_config.schema }}</span>
+                          <span class="table-separator">/</span>
+                          <span class="table-part">{{ func.trigger.volume_config.name }}</span>
+                          <span class="table-separator">/</span>
+                          <span class="table-part">{{ func.trigger.volume_config.sub_path }}</span>
+                        </template>
+                        <template v-else>N/A</template> 
+                      </p>
+                    </template>
                       <button class="btn btn-secondary" @click="viewCode(func)" title="View Source Code">
                         <i class="bi bi-code-slash p-2"></i>
                       </button>
@@ -87,7 +102,8 @@ const getBadgeClass = (triggerType) => {
   const classes = {
     timer: 'bg-primary',
     http: 'bg-success',
-    unity_table: 'bg-warning text-dark'
+    unity_table: 'bg-warning text-dark',
+    unity_volume: 'bg-info text-dark'
   }
   return classes[triggerType] || 'bg-secondary'
 }
