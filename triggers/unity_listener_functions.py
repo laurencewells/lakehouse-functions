@@ -27,8 +27,7 @@ async def unity_table_listener(table_name: str, function_name: str) -> dict:
                 {
                     "status": "success",
                     "changes_detected": True,
-                    "latest_timestamp": <timestamp_in_millis>,
-                    "latest_timestamp_iso": <iso_timestamp_string>,
+                    "latest_version": <version_number>,
                     "action": "initial state recorded" | "changes processed"
                 }
             On success without changes:
@@ -57,15 +56,15 @@ async def unity_table_listener(table_name: str, function_name: str) -> dict:
         
         unity = Unity()
         # Get the last processed timestamp for this table
-        last_timestamp = _table_timestamps.get(table_name)
+        last_version = _table_timestamps.get(table_name)
         # Check for changes
-        changes = await unity.detect_changes_by_timestamp(table_name, last_timestamp)
+        changes = await unity.detect_changes_by_version(table_name, last_version)
         if changes:
-            change_msg = f"Detected changes in Unity table {table_name} - new timestamp: {changes['latest_timestamp_iso']}"
+            change_msg = f"Detected changes in Unity table {table_name} - new version: {changes['latest_version']}"
             L.info(change_msg)
             await manager.broadcast_log(change_msg)
             # Update the last processed timestamp
-            _table_timestamps[table_name] = changes["latest_timestamp"]
+            _table_timestamps[table_name] = changes["latest_version"]
             # If this is not just the initial state, trigger the example function
             if changes["type"] != "initial_state":
                 await manager.broadcast_log(f"Triggering function {function_name} due to table changes")
@@ -76,8 +75,7 @@ async def unity_table_listener(table_name: str, function_name: str) -> dict:
             return {
                 "status": "success",
                 "changes_detected": True,
-                "latest_timestamp": changes["latest_timestamp"],
-                "latest_timestamp_iso": changes["latest_timestamp_iso"],
+                "latest_version": changes["latest_version"],
                 "action": "initial state recorded" if changes["type"] == "initial_state" else "changes processed"
             }
         
