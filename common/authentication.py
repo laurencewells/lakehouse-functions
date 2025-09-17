@@ -128,8 +128,8 @@ class DatabricksAuthentication:
             logging.log(logging.INFO, "Using machine authentication")
             return WorkspaceClient(
                 host=self.server,
-                credentials_provider=self.__credential_provider,
-                session_configuration={"timezone": local_tz},
+                client_id=os.getenv("DATABRICKS_CLIENT_ID"),
+                client_secret=os.getenv("DATABRICKS_CLIENT_SECRET"),
             )
         else:
             raise ValueError("No authentication method provided")

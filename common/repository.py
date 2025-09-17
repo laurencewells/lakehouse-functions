@@ -99,15 +99,17 @@ class Unity:
         """Convert milliseconds since epoch to ISO 8601 timestamp."""
         return datetime.datetime.fromtimestamp(millis / 1000.0).isoformat()
     
-    async def get_table_update_timestamp(self) -> tuple[int, int]:
-        table_info = await asyncio.to_thread(self.workspace_client.tables.get, "_data.tpch.dim_customer", include_delta_metadata=True)
+    async def get_table_update_version(self, table_name: str) -> int:
+        table_info = await asyncio.to_thread(self.workspace_client.tables.get, table_name, include_delta_metadata=True)
         delta_props = table_info.delta_runtime_properties_kvpairs.delta_runtime_properties
 
         # Parse the commit attributes to get version and file status
-        commit_attrs = json.loads(delta_props['delta.commitAttributes'])
-        modification_time = commit_attrs['fileStatus']['modificationTime']
-        version = [commit_attrs['version']]
-        return version, modification_time
+        try:
+            commit_attrs = json.loads(delta_props['delta.commitAttributes'])
+            version = [commit_attrs['version']]
+            return version
+        except Exception as e:
+            return 0
 
     async def get_table_last_updated(self, table_name: str) -> int:
         """
@@ -115,8 +117,10 @@ class Unity:
         Returns the updated_at timestamp in milliseconds.
         """
         try:
-            version, modification_time = await self.get_table_update_timestamp()
-            return int(modification_time)
+            version = await self.get_table_update_version()
+            if version is None:
+                raise ValueError("Table version is None")
+            return int(version)
         except Exception as e:
             raise Exception(f"Error getting table last updated timestamp: {str(e)}")
     
@@ -134,7 +138,8 @@ class Unity:
             limit = VOLUME_LIST_LIMIT
             while file_info or limit_reached:
                 for f in file_info:
-                    file_dates.append(f.last_modified)
+                    if f.last_modified is not None:
+                        file_dates.append(f.last_modified)
                     limit -= 1
                     if limit == 0:
                         limit_reached = True
@@ -142,7 +147,8 @@ class Unity:
                     self.workspace_client.files.list_directory_contents, volume_path, page_token=file_info.next_page_token)
         else:
             for f in file_info:
-                file_dates.append(f.last_modified)
+                if f.last_modified is not None:
+                    file_dates.append(f.last_modified)
         return int(max(file_dates)) if file_dates else None
         
     async def get_volume_last_updated_timestamp(self, volume_path: str) -> int:
@@ -159,7 +165,7 @@ class Unity:
         except Exception as e:
             raise Exception(f"Error getting volume last updated timestamp: {str(e)}")
 
-    async def detect_changes_by_timestamp(self, table_name: str, last_processed_timestamp: Optional[int] = None) -> Optional[dict]:
+    async def detect_changes_by_version(self, table_name: str, last_processed_version: Optional[int] = None) -> Optional[dict]:
         """
         Detect changes in a Unity table by comparing last updated timestamps.
         
@@ -176,14 +182,12 @@ class Unity:
                 For initial state (first run):
                     {
                         "type": "initial_state",
-                        "latest_timestamp": <timestamp_in_millis>,
-                        "latest_timestamp_iso": <iso_timestamp_string>
+                        "latest_version": <version_number>,
                     }
                 For detected changes:
                     {
                         "type": "changes_detected",
-                        "latest_timestamp": <timestamp_in_millis>,
-                        "latest_timestamp_iso": <iso_timestamp_string>
+                        "latest_version": <version_number>,
                     }
                 If no changes: None
                 
@@ -195,29 +199,27 @@ class Unity:
             without triggering change detection
         """
         try:
-            L.info(f"Detecting changes for table {table_name} with last processed timestamp {last_processed_timestamp}")
-            latest_timestamp = await self.get_table_last_updated(table_name)
+            L.info(f"Detecting changes for table {table_name} with last processed version {last_processed_version}")
+            latest_version = await self.get_table_update_version(table_name)
             
             # If no last timestamp provided, return initial state
-            if last_processed_timestamp is None:
+            if last_processed_version is None:
                 return {
                     "type": "initial_state",
-                    "latest_timestamp": latest_timestamp,
-                    "latest_timestamp_iso": self.convert_millis_to_timestamp(latest_timestamp)
+                    "latest_version": latest_version,
                 }
             
             # Check if there are any changes
-            if latest_timestamp == last_processed_timestamp:
+            if latest_version <= last_processed_version:
                 return None
             
             return {
                 "type": "changes_detected",
-                "latest_timestamp": latest_timestamp,
-                "latest_timestamp_iso": self.convert_millis_to_timestamp(latest_timestamp)
+                "latest_version": latest_version,
             }
             
         except Exception as e:
-            raise Exception(f"Error detecting changes by timestamp: {str(e)}")
+            raise Exception(f"Error detecting changes by version: {str(e)}")
         
         
     async def detect_volume_changes_by_timestamp(self, volume_path: str, last_processed_timestamp: Optional[int] = None) -> Optional[dict]:
