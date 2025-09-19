@@ -103,11 +103,11 @@ class Unity:
         table_info = await asyncio.to_thread(self.workspace_client.tables.get, table_name, include_delta_metadata=True)
         delta_props = table_info.delta_runtime_properties_kvpairs.delta_runtime_properties
 
-        # Parse the commit attributes to get version and file status
+        # Parse the commit attributes to get version number if no commit attributes, return 0 this means the cache has gone and table has not been updated
         try:
             commit_attrs = json.loads(delta_props['delta.commitAttributes'])
             version = [commit_attrs['version']]
-            return version
+            return int(version[0])
         except Exception as e:
             return 0
 
